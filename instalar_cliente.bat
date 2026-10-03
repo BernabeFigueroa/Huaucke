@@ -5,7 +5,7 @@ echo        INSTALADOR DEL SISTEMA - HUAUCKE
 echo ===================================================
 echo.
 
-:: 1. Crear carpeta del sistema en C:\Huaucke
+REM 1. Crear carpeta del sistema en C:\Huaucke
 echo [1/3] Preparando directorio C:\Huaucke...
 if not exist "C:\Huaucke" (
     mkdir "C:\Huaucke"
@@ -14,26 +14,23 @@ if not exist "C:\Huaucke" (
     echo       Directorio C:\Huaucke ya existe.
 )
 
-:: 2. Instalar base de datos (solo si no existe previamente)
+REM 2. Instalar base de datos (solo si no existe previamente)
 echo [2/3] Verificando base de datos del negocio...
 if not exist "C:\Huaucke\database.sqlite" (
     if exist "%~dp0database.sqlite" (
-        copy "%~dp0database.sqlite" "C:\Huaucke\database.sqlite" >nul
-        echo       Base de datos inicial instalada (catalogo listo).
+        copy /y "%~dp0database.sqlite" "C:\Huaucke\database.sqlite" >nul
+        echo       Base de datos inicial instalada con exito.
     ) else (
         echo       AVISO: No se encontro database.sqlite junto al instalador.
-        echo       El sistema creara una base vacia al iniciar.
     )
 ) else (
     echo       Base de datos existente detectada. Protegida para no perder datos.
 )
 
-:: 3. Copiar ejecutable y crear acceso directo en el Escritorio
+REM 3. Copiar ejecutable y crear acceso directo en el Escritorio
 echo [3/3] Instalando Huaucke.exe...
 if exist "%~dp0Huaucke.exe" (
-    copy "%~dp0Huaucke.exe" "C:\Huaucke\Huaucke.exe" >nul
-    
-    :: Crear acceso directo en el Escritorio con PowerShell
+    copy /y "%~dp0Huaucke.exe" "C:\Huaucke\Huaucke.exe" >nul
     powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Huaucke POS.lnk')); $s.TargetPath = 'C:\Huaucke\Huaucke.exe'; $s.WorkingDirectory = 'C:\Huaucke'; $s.Save()" >nul 2>&1
     echo       Acceso directo "Huaucke POS" creado en el Escritorio.
 ) else (
