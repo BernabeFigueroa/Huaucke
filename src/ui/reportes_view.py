@@ -10,10 +10,12 @@ from src.core.caja_manager import CajaManager
 from PyQt6.QtWidgets import QMessageBox, QDialog
 
 class DialogoDetalleModerno(QDialog):
-    def __init__(self, titulo, contenido_html, parent=None):
+    def __init__(self, titulo, contenido_html, parent=None, venta_id=None, on_anular=None):
         super().__init__(parent)
         self.setWindowTitle(titulo)
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(480)
+        self.venta_id = venta_id
+        self.on_anular = on_anular
         self.setStyleSheet("""
             QDialog {
                 background-color: #1A2026;
@@ -63,11 +65,48 @@ class DialogoDetalleModerno(QDialog):
         layout.addWidget(frame)
         
         btn_layout = QHBoxLayout()
+        if self.venta_id and self.on_anular:
+            btn_anular = QPushButton("Anular venta")
+            btn_anular.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn_anular.setStyleSheet("""
+                QPushButton {
+                    background-color: transparent;
+                    color: #A37176;
+                    border: 1px solid #3D292C;
+                    border-radius: 6px;
+                    padding: 7px 14px;
+                    font-size: 12px;
+                    font-weight: 500;
+                }
+                QPushButton:hover {
+                    background-color: #2D1418;
+                    color: #F85149;
+                    border-color: #8B2C33;
+                }
+            """)
+            btn_anular.clicked.connect(self.confirmar_anulacion)
+            btn_layout.addWidget(btn_anular)
+
         btn_layout.addStretch()
         btn_ok = QPushButton("Aceptar")
         btn_ok.clicked.connect(self.accept)
         btn_layout.addWidget(btn_ok)
         layout.addLayout(btn_layout)
+
+    def confirmar_anulacion(self):
+        reply = QMessageBox.question(
+            self,
+            "Confirmar Anulación",
+            f"¿Está seguro de anular la Venta #{self.venta_id:08d}?\n\n"
+            "• Se reincorporarán los productos al stock.\n"
+            "• Se descontará el importe de los reportes y de la caja.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.accept()
+            if self.on_anular:
+                self.on_anular(self.venta_id)
 class ReportesView(QWidget):
     def __init__(self):
         super().__init__()
@@ -543,5 +582,24 @@ class ReportesView(QWidget):
             </tr>
         </table>
         """
-        dialog = DialogoDetalleModerno(f"Detalle de Venta #{venta_id:08d}", html, self)
+        dialog = DialogoDetalleModerno(
+            f"Detalle de Venta #{venta_id:08d}", 
+            html, 
+            self,
+            venta_id=venta_id,
+            on_anular=self.anular_venta_accion
+        )
         dialog.exec()
+
+    def anular_venta_accion(self, venta_id: int):
+        try:
+            from src.core.ventas_manager import VentasManager
+            VentasManager.anular_venta(venta_id)
+            QMessageBox.information(
+                self, 
+                "Venta Anulada", 
+                f"La Venta #{venta_id:08d} ha sido anulada con éxito.\nEl stock de los productos ha sido reintegrado."
+            )
+            self.generar_reportes()
+        except Exception as e:
+            QMessageBox.critical(self, "Error al Anular", f"No se pudo anular la venta:\n{str(e)}")

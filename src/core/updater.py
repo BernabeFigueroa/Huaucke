@@ -8,7 +8,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton, QHBoxLayout, QMessageBox, QApplication
 
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "1.0.1"
 GITHUB_REPO = "BernabeFigueroa/Huaucke"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -126,7 +126,7 @@ class UpdateDialog(QDialog):
         super().__init__(parent)
         self.release_info = release_info
         self.setWindowTitle("Actualización Disponible - Huaucke")
-        self.setFixedSize(500, 270)
+        self.setFixedSize(540, 320)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
         self.setup_ui()
 
@@ -194,11 +194,16 @@ class UpdateDialog(QDialog):
         lbl_title.setStyleSheet("color: #ACE0F4;")
         layout.addWidget(lbl_title)
 
-        lbl_desc = QLabel(
+        body_notes = self.release_info.get("body", "").strip()
+        desc_text = (
             f"Se ha publicado una actualización para el Sistema Huaucke.\n"
-            f"Versión actual: v{CURRENT_VERSION} -> Nueva: v{self.release_info['version']}\n\n"
-            f"Haga clic en 'Actualizar e Instalar' para descargar e iniciar la versión más reciente."
+            f"Versión instalada: v{CURRENT_VERSION}  ➔  Nueva versión: v{self.release_info['version']}\n"
         )
+        if body_notes:
+            desc_text += f"\n{body_notes}\n"
+        desc_text += "\nHaga clic en 'Actualizar e Instalar' para descargar e iniciar la versión más reciente."
+
+        lbl_desc = QLabel(desc_text)
         lbl_desc.setWordWrap(True)
         lbl_desc.setStyleSheet("color: #9EB3C2; font-size: 12px;")
         layout.addWidget(lbl_desc)

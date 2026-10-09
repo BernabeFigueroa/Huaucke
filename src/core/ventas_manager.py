@@ -142,3 +142,82 @@ class VentasManager:
             })
                 
         return resultado
+
+    @staticmethod
+    def anular_venta(venta_id: int):
+        """
+        Anula una venta atómicamente:
+        1. Marca el estado de la venta como 'CANCELADA'.
+        2. Reintegra el stock de los productos y promociones asociadas.
+        3. Elimina movimientos de caja asociados a la venta.
+        4. Elimina la deuda en cuenta corriente si la venta fue fiada.
+        """
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT id, estado, total, metodo_pago, caja_sesion_id FROM ventas WHERE id = ?", (venta_id,))
+            venta = cursor.fetchone()
+            if not venta:
+                raise Exception(f"No se encontró la venta #{venta_id}")
+            
+            if venta['estado'] == 'CANCELADA':
+                raise Exception(f"La venta #{venta_id} ya se encuentra anulada.")
+
+            # 1. Obtener los detalles de la venta para devolver stock
+            cursor.execute("""
+                SELECT producto_id, promocion_id, cantidad 
+                FROM ventas_detalle 
+                WHERE venta_id = ?
+            """, (venta_id,))
+            detalles = cursor.fetchall()
+
+            for d in detalles:
+                prod_id = d['producto_id']
+                promo_id = d['promocion_id']
+                cant_vendida = float(d['cantidad'] or 0.0)
+
+                if prod_id:
+                    # Producto simple: sumar al stock_actual
+                    cursor.execute("""
+                        UPDATE productos 
+                        SET stock_actual = stock_actual + ? 
+                        WHERE id = ?
+                    """, (cant_vendida, prod_id))
+                elif promo_id:
+                    # Promoción / Combo: devolver el stock de cada componente
+                    cursor.execute("""
+                        SELECT producto_id, cantidad_requerida 
+                        FROM promociones_detalle 
+                        WHERE promocion_id = ?
+                    """, (promo_id,))
+                    comp_promo = cursor.fetchall()
+                    for cp in comp_promo:
+                        cant_a_devolver = float(cp['cantidad_requerida']) * cant_vendida
+                        cursor.execute("""
+                            UPDATE productos 
+                            SET stock_actual = stock_actual + ? 
+                            WHERE id = ?
+                        """, (cant_a_devolver, cp['producto_id']))
+
+            # 2. Marcar la venta como CANCELADA
+            cursor.execute("UPDATE ventas SET estado = 'CANCELADA' WHERE id = ?", (venta_id,))
+
+            # 3. Eliminar movimientos de caja asociados a esta venta
+            cursor.execute("""
+                DELETE FROM caja_movimientos 
+                WHERE descripcion LIKE ? AND tipo = 'VENTA'
+            """, (f"Venta #{venta_id}%",))
+
+            # 4. Eliminar deuda en cuenta corriente si existiera
+            cursor.execute("""
+                DELETE FROM cta_cte_movimientos 
+                WHERE venta_id = ?
+            """, (venta_id,))
+
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()

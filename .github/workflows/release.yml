@@ -53,8 +53,10 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           name: Release ${{ env.TAG_NAME }}
           body: |
-            Actualización del Sistema de Ventas - Huaucke (${{ env.TAG_NAME }}).
-            Descarga el archivo `Huaucke.exe` para instalar o actualizar.
+            Novedades y mejoras en ${{ env.TAG_NAME }}:
+            - Modificación de precio en Punto de Venta: posibilidad de aplicar el nuevo precio únicamente a la venta actual o actualizarlo de forma permanente en el catálogo (Base de Datos).
+            - Anulación de ventas en Reportes: opción para anular ventas ya registradas con reincorporación automática del stock de los artículos y recálculo de totales de facturación y caja.
+            - Mejoras en la grilla del carrito: distribución proporcional de columnas, alineación de valores numéricos y optimización del panel de cobro.
           files: |
             dist/Huaucke.exe
           draft: false

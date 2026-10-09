@@ -8,6 +8,8 @@ build/
 dist/
 *.spec
 !Huaucke.spec
+*.exe
+*.lnk
 
 # Databases locales y backups de testing
 *.sqlite

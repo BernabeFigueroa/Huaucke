@@ -2,11 +2,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QComboBox,
     QTableWidget, QTableWidgetItem, QPushButton, QHeaderView, QMessageBox, QFrame, QGridLayout, QInputDialog, QRadioButton, QButtonGroup
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont, QShortcut, QKeySequence
 
 from src.core.productos_manager import ProductosManager
-from src.core.ventas_manager import VentasManager
 from src.core.ventas_manager import VentasManager
 from src.core.caja_manager import CajaManager
 from src.core.promociones_manager import PromocionesManager
@@ -15,6 +14,7 @@ from src.core.cta_cte_manager import CtaCteManager
 from src.utils.impresion_ticket import ImpresoraTicket
 from src.ui.buscador_productos import BuscadorProductosDialog
 from src.ui.buscador_clientes import BuscadorClientesDialog
+from src.ui.cambio_precio_dialog import CambioPrecioDialog, parse_precio
 
 class POSView(QWidget):
     venta_realizada = pyqtSignal()
@@ -161,84 +161,102 @@ class POSView(QWidget):
         # --- 3. GRILLA DE PRODUCTOS ---
         self.tabla_carrito = QTableWidget(0, 5)
         self.tabla_carrito.setHorizontalHeaderLabels(["Código", "Descripción", "Cantidad", "P. Unitario", "Importe"])
-        self.tabla_carrito.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        
+        header = self.tabla_carrito.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        
+        self.tabla_carrito.setColumnWidth(0, 140)  # Código / ID
+        # Columna 1 (Descripción) se expande con todo el espacio sobrante
+        self.tabla_carrito.setColumnWidth(2, 90)   # Cantidad
+        self.tabla_carrito.setColumnWidth(3, 130)  # P. Unitario
+        self.tabla_carrito.setColumnWidth(4, 130)  # Importe
+        
         self.tabla_carrito.setFont(QFont("Segoe UI", 12))
         self.tabla_carrito.verticalHeader().setVisible(False)
         self.tabla_carrito.verticalHeader().setDefaultSectionSize(40)
         self.tabla_carrito.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.tabla_carrito.itemChanged.connect(self.al_cambiar_celda)
+        self.tabla_carrito.cellDoubleClicked.connect(self.al_doble_click_celda)
         layout_principal.addWidget(self.tabla_carrito)
 
         # --- 4. PANEL INFERIOR: TOTALES Y ACCIONES ---
         bottom_frame = self.crear_seccion_frame()
         bottom_layout = QHBoxLayout(bottom_frame)
-        bottom_layout.setContentsMargins(15, 15, 15, 15)
+        bottom_layout.setContentsMargins(15, 12, 15, 12)
+        bottom_layout.setSpacing(16)
 
-        # Vendedor e Info adicional
-        info_layout = QVBoxLayout()
-        info_layout.addWidget(QLabel("Vendedor: 01 - Principal"))
-        lbl_shortcuts = QLabel("[F5] Cobrar   |   [F12] Cancelar Venta   |   [Supr] Eliminar Fila")
-        lbl_shortcuts.setStyleSheet("color: #a6adc8;")
-        info_layout.addWidget(lbl_shortcuts)
-        bottom_layout.addLayout(info_layout)
+        # Panel Izquierdo: Vendedor, Atajos y Medio de Pago
+        izq_layout = QVBoxLayout()
+        izq_layout.setSpacing(6)
 
-        bottom_layout.addStretch()
+        fila_vendedor_pago = QHBoxLayout()
+        lbl_vendedor = QLabel("Vendedor: 01 - Principal")
+        lbl_vendedor.setStyleSheet("color: #C9D1D9; font-weight: 600;")
+        fila_vendedor_pago.addWidget(lbl_vendedor)
+
+        fila_vendedor_pago.addSpacing(16)
+        lbl_pago = QLabel("Medio de Pago:")
+        lbl_pago.setStyleSheet("color: #8B949E; font-weight: 500;")
+        fila_vendedor_pago.addWidget(lbl_pago)
+
+        self.cb_medio_pago = QComboBox()
+        self.cb_medio_pago.addItems(["EFECTIVO", "TRANSFERENCIA", "MIXTO", "FIADO / CTA. CTE."])
+        self.cb_medio_pago.setStyleSheet("font-size: 13px; font-weight: bold; padding: 4px 8px;")
+        self.cb_medio_pago.setFixedHeight(34)
+        fila_vendedor_pago.addWidget(self.cb_medio_pago)
+        fila_vendedor_pago.addStretch()
+        izq_layout.addLayout(fila_vendedor_pago)
+
+        lbl_shortcuts = QLabel("[F2] Buscar Art.  |  [F3] Cliente  |  [F4] Cambiar Precio  |  [F5] Cobrar  |  [F12] Cancelar  |  [Supr] Eliminar")
+        lbl_shortcuts.setStyleSheet("color: #8B949E; font-size: 12px;")
+        izq_layout.addWidget(lbl_shortcuts)
+
+        bottom_layout.addLayout(izq_layout, stretch=2)
 
         # Botones de Acción
         self.btn_cobrar = QPushButton("COBRAR (F5)")
-        self.btn_cobrar.setMinimumSize(150, 60)
+        self.btn_cobrar.setFixedSize(140, 52)
         self.btn_cobrar.setStyleSheet("""
-            QPushButton { background-color: #8DE2B9; color: #161B22; font-weight: bold; font-size: 16px; border-radius: 8px; border: none;}
+            QPushButton { background-color: #8DE2B9; color: #161B22; font-weight: bold; font-size: 15px; border-radius: 8px; border: none;}
             QPushButton:hover { background-color: #A2E8C8; }
             QPushButton:pressed { background-color: #76CCA1; }
         """)
         self.btn_cobrar.clicked.connect(self.cobrar_venta)
 
         self.btn_cancelar = QPushButton("CANCELAR (F12)")
-        self.btn_cancelar.setMinimumSize(150, 60)
+        self.btn_cancelar.setFixedSize(140, 52)
         self.btn_cancelar.setStyleSheet("""
-            QPushButton { background-color: #E28D8D; color: #161B22; font-weight: bold; font-size: 16px; border-radius: 8px; border: none;}
+            QPushButton { background-color: #E28D8D; color: #161B22; font-weight: bold; font-size: 15px; border-radius: 8px; border: none;}
             QPushButton:hover { background-color: #E8A2A2; }
             QPushButton:pressed { background-color: #CC7676; }
         """)
         self.btn_cancelar.clicked.connect(self.cancelar_venta)
 
-        self.btn_cancelar.clicked.connect(self.cancelar_venta)
-
         bottom_layout.addWidget(self.btn_cobrar)
         bottom_layout.addWidget(self.btn_cancelar)
-        
-        # Separador / Espacio
-        bottom_layout.addStretch()
-
-        # Selector de Medio de Pago
-        pago_layout = QVBoxLayout()
-        pago_layout.addWidget(QLabel("Medio de Pago:"))
-        self.cb_medio_pago = QComboBox()
-        self.cb_medio_pago.addItems(["EFECTIVO", "TRANSFERENCIA", "MIXTO", "FIADO / CTA. CTE."])
-        self.cb_medio_pago.setStyleSheet("font-size: 16px; font-weight: bold; padding: 5px;")
-        self.cb_medio_pago.setFixedHeight(40)
-        pago_layout.addWidget(self.cb_medio_pago)
-        pago_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        bottom_layout.addLayout(pago_layout)
 
         # Contenedor para el total
         total_layout = QVBoxLayout()
+        total_layout.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         
         self.lbl_descuento = QLabel("")
-        self.lbl_descuento.setFont(QFont("Segoe UI", 12))
-        self.lbl_descuento.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom)
+        self.lbl_descuento.setFont(QFont("Segoe UI", 11))
+        self.lbl_descuento.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.lbl_descuento.setStyleSheet("color: #E28D8D;")
         
         self.lbl_total = QLabel("$0.00")
-        self.lbl_total.setFont(QFont("Segoe UI", 48, QFont.Weight.Bold))
-        self.lbl_total.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-        self.lbl_total.setStyleSheet("color: #ACE0F4;")
+        self.lbl_total.setFont(QFont("Segoe UI", 34, QFont.Weight.Bold))
+        self.lbl_total.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.lbl_total.setStyleSheet("color: #ACE0F4; padding-right: 6px;")
         
         total_layout.addWidget(self.lbl_descuento)
         total_layout.addWidget(self.lbl_total)
         
-        bottom_layout.addLayout(total_layout)
+        bottom_layout.addLayout(total_layout, stretch=1)
 
         layout_principal.addWidget(bottom_frame)
 
@@ -247,6 +265,7 @@ class POSView(QWidget):
         QShortcut(QKeySequence("F12"), self, self.cancelar_venta)
         QShortcut(QKeySequence("F2"), self, self.abrir_buscador_f2)
         QShortcut(QKeySequence("F3"), self, self.abrir_buscador_clientes_f3)
+        QShortcut(QKeySequence("F4"), self, self.cambiar_precio_seleccionado_f4)
         QShortcut(QKeySequence("Delete"), self, self.eliminar_fila)
 
         self.txt_codigo.setFocus()
@@ -380,6 +399,8 @@ class POSView(QWidget):
         for item in self.carrito:
             if item.get('es_promo'):
                 continue
+            if item.get('precio_manual'):
+                continue # Respetar precio modificado manualmente en esta venta
                 
             producto = ProductosManager.get_by_id(item['producto_id'])
             if not producto:
@@ -476,18 +497,27 @@ class POSView(QWidget):
             total += subtotal
 
             # Crear items
-            item_cod = QTableWidgetItem(item['codigo_barras'])
+            cod_mostrar = item.get('codigo_barras') or (f"[{item['producto_id']}]" if item.get('producto_id') else "")
+            item_cod = QTableWidgetItem(str(cod_mostrar))
             item_desc = QTableWidgetItem(item['nombre'])
             item_cant = QTableWidgetItem(f"{item['cantidad']:g}")
             item_pu = QTableWidgetItem(f"{item['precio_unitario']:.2f}")
             item_imp = QTableWidgetItem(f"{subtotal:.2f}")
 
-            # Solo la cantidad (columna 2) es editable, el resto bloqueado
+            # Alineaciones limpias
+            item_cod.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_desc.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            item_cant.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            item_pu.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            item_imp.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+            # Cantidad y Precio son editables para artículos comunes; combos quedan bloqueados
             item_cod.setFlags(item_cod.flags() & ~Qt.ItemFlag.ItemIsEditable)
             item_desc.setFlags(item_desc.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if item.get('es_promo'):
                 item_cant.setFlags(item_cant.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            item_pu.setFlags(item_pu.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                item_pu.setFlags(item_pu.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            # Para productos normales: item_pu mantiene Qt.ItemFlag.ItemIsEditable activo
             item_imp.setFlags(item_imp.flags() & ~Qt.ItemFlag.ItemIsEditable)
 
             self.tabla_carrito.setItem(row_idx, 0, item_cod)
@@ -528,6 +558,100 @@ class POSView(QWidget):
                 self.carrito[row]['cantidad'] = nueva_cantidad
                 self.procesar_promociones()
                 self.actualizar_tabla()
+
+        elif col == 3: # Columna Precio Unitario
+            if row >= len(self.carrito):
+                return
+            
+            item_carrito = self.carrito[row]
+            if item_carrito.get('es_promo'):
+                self.actualizar_tabla()
+                return
+
+            try:
+                nuevo_precio = parse_precio(item.text())
+            except ValueError:
+                QMessageBox.warning(self, "Precio Inválido", "El precio unitario debe ser un número válido mayor o igual a 0.")
+                self.actualizar_tabla()
+                return
+
+            precio_anterior = float(item_carrito['precio_unitario'])
+            if abs(nuevo_precio - precio_anterior) < 0.001:
+                return
+
+            # Deferir al siguiente tick del event loop para que el editor de QTableWidget cierre limpiamente
+            QTimer.singleShot(0, lambda r=row, p_ant=precio_anterior, p_nue=nuevo_precio: self._procesar_cambio_precio_modal(r, p_ant, p_nue))
+
+    def _procesar_cambio_precio_modal(self, row, precio_anterior, nuevo_precio):
+        if row >= len(self.carrito):
+            return
+        item_carrito = self.carrito[row]
+        dialog = CambioPrecioDialog(
+            self,
+            nombre_producto=item_carrito['nombre'],
+            codigo=item_carrito.get('codigo_barras', ''),
+            precio_anterior=precio_anterior,
+            precio_nuevo=nuevo_precio
+        )
+        accion, precio_final = dialog.ejecutar()
+
+        if accion == "VENTA":
+            item_carrito['precio_unitario'] = precio_final
+            item_carrito['precio_manual'] = True
+            self.actualizar_tabla()
+        elif accion == "CATALOGO":
+            item_carrito['precio_unitario'] = precio_final
+            item_carrito['precio_manual'] = True
+            if item_carrito.get('producto_id'):
+                ProductosManager.actualizar_precio_general(
+                    item_carrito['producto_id'],
+                    precio_final,
+                    es_precio_tarjeta=self.rb_local.isChecked()
+                )
+            self.actualizar_tabla()
+        else:
+            # Canceló o cerró modal: revertir al precio anterior
+            self.actualizar_tabla()
+
+    def al_doble_click_celda(self, row, col):
+        if col == 3:
+            self.cambiar_precio_seleccionado_f4()
+
+    def cambiar_precio_seleccionado_f4(self):
+        row = self.tabla_carrito.currentRow()
+        if row < 0 or row >= len(self.carrito):
+            QMessageBox.information(self, "Cambiar Precio", "Seleccione un producto en la tabla para modificar su precio (o presione F4).")
+            return
+
+        item_carrito = self.carrito[row]
+        if item_carrito.get('es_promo'):
+            QMessageBox.warning(self, "Promoción Combo", "No se puede editar directamente el precio de una promoción combo.")
+            return
+
+        precio_actual = float(item_carrito['precio_unitario'])
+        dialog = CambioPrecioDialog(
+            self,
+            nombre_producto=item_carrito['nombre'],
+            codigo=item_carrito.get('codigo_barras', ''),
+            precio_anterior=precio_actual,
+            precio_nuevo=precio_actual
+        )
+        accion, precio_final = dialog.ejecutar()
+
+        if accion == "VENTA":
+            item_carrito['precio_unitario'] = precio_final
+            item_carrito['precio_manual'] = True
+            self.actualizar_tabla()
+        elif accion == "CATALOGO":
+            item_carrito['precio_unitario'] = precio_final
+            item_carrito['precio_manual'] = True
+            if item_carrito.get('producto_id'):
+                ProductosManager.actualizar_precio_general(
+                    item_carrito['producto_id'],
+                    precio_final,
+                    es_precio_tarjeta=self.rb_local.isChecked()
+                )
+            self.actualizar_tabla()
 
     def resetear_estado_venta(self):
         self.carrito.clear()

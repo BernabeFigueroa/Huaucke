@@ -104,6 +104,46 @@ class ProductosManager:
             conn.close()
 
     @staticmethod
+    def actualizar_precio_general(producto_id: int, nuevo_precio: float, es_precio_tarjeta: bool = False):
+        """
+        Actualiza el precio de venta de un producto en la base de datos de forma atómica.
+        Recalcula la utilidad porcentual si el costo_final es mayor a 0 y es precio contado.
+        """
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT costo_final, precio_contado, precio_tarjeta, utilidad_porcentaje FROM productos WHERE id = ?", (producto_id,))
+            prod = cursor.fetchone()
+            if not prod:
+                return False
+
+            nuevo_precio_float = float(nuevo_precio)
+            if es_precio_tarjeta:
+                cursor.execute("""
+                    UPDATE productos 
+                    SET precio_tarjeta = ?
+                    WHERE id = ?
+                """, (nuevo_precio_float, producto_id))
+            else:
+                costo_final = float(prod['costo_final'] or 0.0)
+                if costo_final > 0:
+                    nueva_utilidad = ((nuevo_precio_float - costo_final) / costo_final) * 100.0
+                else:
+                    nueva_utilidad = float(prod['utilidad_porcentaje'] or 0.0)
+                cursor.execute("""
+                    UPDATE productos 
+                    SET precio_contado = ?, utilidad_porcentaje = ?
+                    WHERE id = ?
+                """, (nuevo_precio_float, round(nueva_utilidad, 2), producto_id))
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            conn.close()
+
+    @staticmethod
     def eliminar_producto(producto_id):
         conn = get_connection()
         cursor = conn.cursor()
