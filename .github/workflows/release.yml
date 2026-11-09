@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: 'Tag de la versión (ej. v1.0.1)'
+        description: 'Tag de la versión (ej. v1.0.2)'
         required: true
-        default: 'v1.0.1'
+        default: 'v1.0.2'
 
 jobs:
   build-and-release:
@@ -54,9 +54,8 @@ jobs:
           name: Release ${{ env.TAG_NAME }}
           body: |
             Novedades y mejoras en ${{ env.TAG_NAME }}:
-            - Modificación de precio en Punto de Venta: posibilidad de aplicar el nuevo precio únicamente a la venta actual o actualizarlo de forma permanente en el catálogo (Base de Datos).
-            - Anulación de ventas en Reportes: opción para anular ventas ya registradas con reincorporación automática del stock de los artículos y recálculo de totales de facturación y caja.
-            - Mejoras en la grilla del carrito: distribución proporcional de columnas, alineación de valores numéricos y optimización del panel de cobro.
+            - Botón «Buscar actualizaciones» para consultar GitHub desde el menú lateral.
+            - La búsqueda manual muestra el error de la consulta o indica si la publicación no tiene un ejecutable descargable.
           files: |
             dist/Huaucke.exe
           draft: false

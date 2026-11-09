@@ -8,7 +8,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton, QHBoxLayout, QMessageBox, QApplication
 
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "1.0.2"
 GITHUB_REPO = "BernabeFigueroa/Huaucke"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -33,8 +33,7 @@ class UpdateCheckerThread(QThread):
                     tag_name = data.get("tag_name", "").lstrip("v").strip()
                     
                     if not tag_name:
-                        self.no_update.emit()
-                        return
+                        raise ValueError("La respuesta de GitHub no incluye tag_name.")
 
                     # Comparar versiones de forma semántica
                     if version.parse(tag_name) > version.parse(CURRENT_VERSION):
@@ -69,13 +68,12 @@ class UpdateCheckerThread(QThread):
                                 "size": exe_size
                             })
                         else:
-                            self.no_update.emit()
+                            raise ValueError(f"GitHub publicó v{tag_name} sin un ejecutable .exe descargable.")
                     else:
                         self.no_update.emit()
                 else:
-                    self.no_update.emit()
+                    raise ValueError(f"GitHub respondió con HTTP {response.status}.")
         except Exception as e:
-            # Si no hay internet o aún no hay release en GitHub, continúa silenciosamente
             self.error_occurred.emit(str(e))
 
 

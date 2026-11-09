@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QLabel
+from PyQt6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QPushButton, QStackedWidget, QLabel, QMessageBox
 from PyQt6.QtCore import Qt
 from src.ui.pos_view import POSView
 from src.ui.productos_view import ProductosView
@@ -30,10 +30,32 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.verificar_actualizaciones()
 
-    def verificar_actualizaciones(self):
-        self.updater_thread = UpdateCheckerThread()
+    def verificar_actualizaciones(self, manual=False):
+        self.btn_actualizaciones.setEnabled(False)
+        self.updater_thread = UpdateCheckerThread(self)
         self.updater_thread.update_available.connect(self.mostrar_dialogo_actualizacion)
+        self.updater_thread.finished.connect(self.finalizar_busqueda_actualizaciones)
+        if manual:
+            self.updater_thread.no_update.connect(self.mostrar_sin_actualizaciones)
+            self.updater_thread.error_occurred.connect(self.mostrar_error_actualizaciones)
         self.updater_thread.start()
+
+    def finalizar_busqueda_actualizaciones(self):
+        self.updater_thread.deleteLater()
+        self.btn_actualizaciones.setEnabled(True)
+
+    def mostrar_sin_actualizaciones(self):
+        QMessageBox.information(
+            self, "Buscar actualizaciones", f"No hay una versión posterior a v{CURRENT_VERSION}."
+        )
+
+    def mostrar_error_actualizaciones(self, error):
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle("Error al buscar actualizaciones")
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(error)
+        dialog.exec()
 
     def mostrar_dialogo_actualizacion(self, release_info):
         dialog = UpdateDialog(release_info, self)
@@ -99,6 +121,9 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_caja)
         sidebar_layout.addWidget(self.btn_reportes)
         sidebar_layout.addStretch()
+        self.btn_actualizaciones = QPushButton("Buscar actualizaciones")
+        self.btn_actualizaciones.clicked.connect(lambda: self.verificar_actualizaciones(manual=True))
+        sidebar_layout.addWidget(self.btn_actualizaciones)
 
         # --- Área Central (Stack de Vistas) ---
         self.stacked_widget = QStackedWidget()
