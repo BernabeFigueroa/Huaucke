@@ -1,16 +1,25 @@
 import os
 import sys
 import json
+import ssl
 import urllib.request
 import subprocess
+import certifi
 from packaging import version
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton, QHBoxLayout, QMessageBox, QApplication
 
-CURRENT_VERSION = "1.0.2"
+CURRENT_VERSION = "1.0.3"
 GITHUB_REPO = "BernabeFigueroa/Huaucke"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+
+def github_ssl_context():
+    context = ssl.create_default_context()
+    context.load_verify_locations(cafile=certifi.where())
+    return context
+
 
 class UpdateCheckerThread(QThread):
     update_available = pyqtSignal(dict)  # Emite datos del release si hay actualización
@@ -27,7 +36,7 @@ class UpdateCheckerThread(QThread):
                 GITHUB_API_URL,
                 headers={"User-Agent": "Huaucke-AutoUpdater"}
             )
-            with urllib.request.urlopen(req, timeout=6) as response:
+            with urllib.request.urlopen(req, timeout=6, context=github_ssl_context()) as response:
                 if response.status == 200:
                     data = json.loads(response.read().decode())
                     tag_name = data.get("tag_name", "").lstrip("v").strip()
@@ -93,7 +102,7 @@ class DownloadWorkerThread(QThread):
                 self.download_url,
                 headers={"User-Agent": "Huaucke-AutoUpdater"}
             )
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=30, context=github_ssl_context()) as response:
                 total_size = response.headers.get('content-length')
                 if total_size:
                     total_size = int(total_size)

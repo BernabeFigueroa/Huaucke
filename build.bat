@@ -13,7 +13,7 @@ if exist dist rmdir /s /q dist
 
 echo.
 echo Generando ejecutable (Onefile)...
-python -m PyInstaller --noconfirm --onefile --windowed --icon="logo.ico" --name "Huaucke" --add-data "logo.jpg;." main.py
+python -m PyInstaller --noconfirm --onefile --windowed --icon="logo.ico" --name "Huaucke" --add-data "logo.jpg;." --collect-data certifi main.py
 
 echo.
 echo =========================================

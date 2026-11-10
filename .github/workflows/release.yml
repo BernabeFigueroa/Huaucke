@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: 'Tag de la versión (ej. v1.0.2)'
+        description: 'Tag de la versión (ej. v1.0.3)'
         required: true
-        default: 'v1.0.2'
+        default: 'v1.0.3'
 
 jobs:
   build-and-release:
@@ -35,7 +35,7 @@ jobs:
 
       - name: Compilar ejecutable (Onefile)
         run: |
-          python -m PyInstaller --noconfirm --onefile --windowed --icon="logo.ico" --name="Huaucke" --add-data="logo.jpg;." main.py
+          python -m PyInstaller --noconfirm --onefile --windowed --icon="logo.ico" --name="Huaucke" --add-data="logo.jpg;." --collect-data certifi main.py
 
       - name: Determinar Tag de Release
         id: vars
@@ -54,8 +54,7 @@ jobs:
           name: Release ${{ env.TAG_NAME }}
           body: |
             Novedades y mejoras en ${{ env.TAG_NAME }}:
-            - Botón «Buscar actualizaciones» para consultar GitHub desde el menú lateral.
-            - La búsqueda manual muestra el error de la consulta o indica si la publicación no tiene un ejecutable descargable.
+            - Incluye los certificados raíz de certifi para consultar y descargar actualizaciones con verificación HTTPS.
           files: |
             dist/Huaucke.exe
           draft: false
